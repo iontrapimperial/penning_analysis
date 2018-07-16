@@ -6,3 +6,4 @@ output into useable data.
 """
 
 from .load import load, DataFile
+from . import spectrum
