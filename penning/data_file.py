@@ -40,7 +40,7 @@ _metadata_fields = [
         'Spectrum Type:',
         'type',
         str,
-        'str = \'Continuous\' | ?',
+        'str = \'Continuous\' | \'Windowed\' | \'Fixed\'',
         'The type of spectrum taken',
     ),
     (
@@ -191,9 +191,6 @@ class DataFile:
             or they can be accessed point-by-point as 4-tuples.
         file_name: str -- The file name that this class was read from.
         points: int -- The number of points in the spectrum.
-        fixed_frequency: bool --
-            Whether this scan was a fixed frequency scan (e.g. a scan of wait
-            times) or not.
     """
     def __init__(self, data, metadata, file_name):
         self.data = data
@@ -201,10 +198,8 @@ class DataFile:
         for detail, meta in zip(_metadata_fields, metadata):
             setattr(self, detail[1], meta)
         if self.start_time is None:
-            self.fixed_frequency = False
             self.step_size = self.step_size * 1e3 # kHz to Hz
         else:
-            self.fixed_frequency = True
             self.step_size = self.step_size * 40e-9 # ticks to seconds
         self.points = self.data.shape[0] // self.shots
 
