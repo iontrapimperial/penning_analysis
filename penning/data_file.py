@@ -7,6 +7,8 @@ class `DataFile`, which is a Python representation of the data and the metadata.
 import datetime, collections
 import numpy as np
 
+__all__ = ['load', 'DataFile']
+
 def _nullable(parser):
     """
     Convert a parsing function into a 'nullable' function, i.e. one that returns
@@ -19,15 +21,19 @@ _kHz = lambda f: float(f) * 1e3
 _MHz = lambda f: float(f) * 1e6
 _percent = lambda f: float(f) * 0.01
 
+def _sideband(string: str):
+    return {"0": 0, "R": -1, "B": 1}[string[-1]] * int(string[:-1])
+
 # The fields in the metadata at the top of the file, with their in-file
-# identifiers, the identifier we give them in Python, and the parser used to
-# convert their values.
+# identifiers, the identifier we give them in Python, the parser used to
+# convert their values, an identifier for the type after conversion, and a
+# description of the field.
 _metadata_fields = [
     (
         'Spectroscopy data file',
         'time',
         lambda time: datetime.datetime.strptime(time, "%d/%m/%Y %H:%M:%S"),
-        'datetime.datime',
+        'datetime.datetime',
         'The time the spectrum was taken',
     ),
     (
@@ -89,14 +95,16 @@ _metadata_fields = [
     (
         'Step Size (kHz or ticks):',
         'step_size',
-        _kHz,
-        'float in Hz',
-        'The frequency spacing between each point',
+        float,
+        'float in Hz | float in s',
+        '''The spacing between two points in the scan.  If the scan is a
+        frequency scan, this will be measured in Hz.  If it is a time scan, it
+        will be in s.''',
     ),
     (
         'Sidebands to scan / side:',
         'total_sidebands',
-        _nullable(int),
+        _nullable(lambda str_: 2 * int(str_) + 1),
         '?int',
         'The number of sidebands to scan over all files.',
     ),
@@ -119,7 +127,7 @@ _metadata_fields = [
         'shots',
         int,
         'int',
-        'The number of shots per frequency point',
+        'The number of shots taken per point.',
     ),
     (
         'File contains interleaved spectra:',
@@ -131,16 +139,16 @@ _metadata_fields = [
     (
         'This is sideband:',
         'sideband',
-        _nullable(int),
+        _nullable(_sideband),
         '?int',
-        'Which number sideband this is, if `total_sidebands` is not 1.'
+        'Which number sideband this is, if `total_sidebands` is not 1.',
     ),
     (
         'Pulse Start Length (fixed freq):',
-        'start_length',
-        _nullable(float),
-        '?float',
-        'The fixed frequency pulse start length',
+        'start_time',
+        _nullable(lambda x: int(x) * 40e-9),
+        '?float in s',
+        'The starting wait time in a fixed frequency scan.',
     ),
     (
         'Number of Steps (fixed freq):',
@@ -174,24 +182,44 @@ class DataFile:
     it.
 
     Members --
-        data: numpy.array(dtype=int32) -- The raw data from the file.
-
+        data: numpy.array(dtype=[("cool", "i4"), ("cool_error", "i4"),
+                                 ("counts", "i4"), ("counts_error", "i4")]) --
+            The raw data from the file, arranged into a structured numpy array.
+            The different columns of data are can be accessed by indexing on the
+            string identifying the columns, for example
+                data['cool']
+            or they can be accessed point-by-point as 4-tuples.
+        file_name: str -- The file name that this class was read from.
+        points: int -- The number of points in the spectrum.
+        fixed_frequency: bool --
+            Whether this scan was a fixed frequency scan (e.g. a scan of wait
+            times) or not.
     """
     def __init__(self, data, metadata, file_name):
         self.data = data
         self.file_name = file_name
         for detail, meta in zip(_metadata_fields, metadata):
             setattr(self, detail[1], meta)
+        if self.start_time is None:
+            self.fixed_frequency = False
+            self.step_size = self.step_size * 1e3 # kHz to Hz
+        else:
+            self.fixed_frequency = True
+            self.step_size = self.step_size * 40e-9 # ticks to seconds
+        self.points = self.data.shape[0] // self.shots
 
     def __repr__(self):
         preamble = f"Penning trap spectrum file '{self.file_name}':"
         attributes = "\n".join([f"  {attr}: {getattr(self, attr)}"
                                 for _, attr, _, _, _ in _metadata_fields])
-        return "\n".join([preamble, attributes])
+        return "\n".join([preamble,
+                          f"  points: {self.points}",
+                          f"  step_size: {self.step_size}",
+                          attributes])
 
-DataFile.__doc__ = DataFile.__doc__.rstrip() + "\n"\
-                   + "\n".join([f"        {field[1]}: {field[3]} -- {field[4]}"
-                                for field in _metadata_fields])
+DataFile.__doc__ = DataFile.__doc__.rstrip(" ")\
+                   + "\n".join([f"        {attr}: {type} -- {desc}"
+                                for _, attr, _, type, desc in _metadata_fields])
 
 def load(file: str) -> DataFile:
     """
@@ -201,7 +229,7 @@ def load(file: str) -> DataFile:
     metadata = []
     with open(file, "r") as f:
         line = 0
-        for description, _, parse, _, _ in _metadata_fields:
+        for description, _, parse, type_, _ in _metadata_fields:
             line += 1
             file_description = f.readline().rstrip()
             if description != file_description:
@@ -215,8 +243,8 @@ def load(file: str) -> DataFile:
                 metadata.append(parse(value))
             except ValueError:
                 raise ValueError(
-                    f"Unable to parse value of line {line} of '{file}'."
-                    f"  Value was '{value}'."
+                    f"Unable to parse value on line {line} of '{file}'."
+                    f"  Value was '{value}', but expected type '{type_}'."
                 )
         line += 1
         data_line = f.readline().rstrip()
@@ -227,4 +255,9 @@ def load(file: str) -> DataFile:
                 f" {line}, but instead saw '{data_line}'."
             )
         data = np.array([int(line) for line in f], dtype=np.int32)
+        data = np.transpose(np.reshape(data, (data.shape[0] // 4, 4)))
+        data = np.core.records.fromarrays(
+                    data,
+                    names='cool, cool_error, counts, counts_error',
+                    formats='i4, i4, i4, i4')
     return DataFile(data, metadata, file)
