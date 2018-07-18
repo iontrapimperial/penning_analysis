@@ -7,7 +7,8 @@ Also contains functions for extracting the stored data from a `DataFile`.  The
 base function is `independents()`, which automatically detects the type of the
 independent parameter (and is available in the package namespace).  You can
 manually call `frequencies()` and `times()` if this generation is not
-successful.
+successful.  For the dependent data, the main function is `probabilities()`,
+also in the package namespace.
 """
 
 import datetime, collections
