@@ -14,12 +14,9 @@ oscillations etc) as a `numpy.array`.  Use `probabilities()` to get a structured
 `numpy.array` with the excitation probabilities for each number of ions and the
 associated errors.
 
-If the automatic detection fails, you can manually call `spectrum.frequencies()`
-or `spectrum.times()` to suit your needs.
+If the automatic detection fails, you can manually call
+`data_file.frequencies()` or `data_file.times()` to suit your needs.
 """
 
-from .data_file import *
-from .spectrum import independents, probabilities
-from . import data_file, spectrum
-
-__all__ = data_file.__all__ + ['independents', 'probabilities']
+from . import data_file
+from .data_file import load, independents, probabilities, DataFile
