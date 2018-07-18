@@ -11,7 +11,7 @@ successful.  For the dependent data, the main function is `probabilities()`,
 also in the package namespace.
 """
 
-import datetime, collections
+import datetime
 import numpy as np
 
 __all__ = ['load', 'DataFile', 'independents', 'probabilities', 'times',
