@@ -25,8 +25,8 @@ def _nullable(parser):
     return lambda string: (None if string == 'N/A' else parser(string))
 
 # Helper functions for converting various inputs.
-_kHz = lambda f: float(f) * 1e3
-_MHz = lambda f: float(f) * 1e6
+_kHz = lambda f: float(f) * 2e3 * np.pi
+_MHz = lambda f: float(f) * 2e6 * np.pi
 _percent = lambda f: float(f) * 0.01
 
 def _sideband(string: str):
@@ -206,7 +206,7 @@ class DataFile:
         for detail, meta in zip(_metadata_fields, metadata):
             setattr(self, detail[1], meta)
         if self.start_time is None:
-            self.step_size = self.step_size * 1e3 # kHz to Hz
+            self.step_size = _kHz(self.step_size) # lin kHz to ang Hz
         else:
             self.step_size = self.step_size * 40e-9 # ticks to seconds
         self.points = self.data.shape[0] // self.shots
