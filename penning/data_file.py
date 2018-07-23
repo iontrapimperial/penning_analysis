@@ -224,10 +224,26 @@ DataFile.__doc__ = DataFile.__doc__.rstrip(" ")\
                    + "\n".join([f"        {attr}: {type} -- {desc}"
                                 for _, attr, _, type, desc in _metadata_fields])
 
-def load(file: str) -> DataFile:
+def load(file: str, override_shots:int=None) -> DataFile:
     """
     Given a path to a data file, read the metadata and data into Python types
-    and return the resulting class.
+    and return the resulting class.  The number of shots per point can be
+    overridden with the `override_shots` argument, which takes an integer.
+
+    Arguments:
+    file: str -- The file name to load from.
+    override_shots: ?int --
+        The number of shots per point to use.  This value takes precedence over
+        the number found in the file.  It is a `ValueError` to try and override
+        to a number of shots which doesn't divide cleanly into the total number
+        of acquisitions in the file.
+
+    Returns:
+    DataFile --
+        The Python representation of the output data file.
+
+    Raises:
+    ValueError -- If the override number of shots is invalid for the file.
     """
     metadata = []
     with open(file, "r") as f:
@@ -263,7 +279,16 @@ def load(file: str) -> DataFile:
                     data,
                     names='cool, cool_error, counts, counts_error',
                     formats='i4, i4, i4, i4')
-    return DataFile(data, metadata, file)
+    data_file = DataFile(data, metadata, file)
+    if override_shots is not None:
+        total_shots = data_file.shots * data_file.points
+        if total_shots % override_shots != 0:
+            raise ValueError("Could not override the number of shots per point"\
+                             + f" to be {override_shots} when the file has"\
+                             + f" {total_shots} total acquisitions.")
+        data_file.shots = override_shots
+        data_file.points = total_shots // override_shots
+    return data_file
 
 def _points(data: np.array, shots: int) -> list:
     """
