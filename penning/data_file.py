@@ -242,6 +242,8 @@ def _points(data: np.array, shots: int) -> list:
         A list of separated `numpy` arrays, where the list index runs over the
         points.
     """
+    if data.shape[0] == 0:
+        return []
     return np.split(data, data.shape[0] // shots)
 
 def _spectra(data: np.array, spectra: int) -> list:
@@ -357,10 +359,13 @@ def probabilities(data_file: DataFile,
                   cool_threshold: int,
                   count_thresholds: int,
                   min_error: float=0.01) -> np.array:
+    if data_file.points == 0:
+        return np.array([[]] * (2 if isinstance(count_thresholds, int)\
+                                else 1 + len(count_thresholds)),
+                        dtype=[("probability", "f8"), ("error", "f8")])
     return np.transpose(np.array(
         [_point_probabilities(point, cool_threshold, count_thresholds,min_error)
          for point in _points(data_file.data, data_file.shots)]))
-
 probabilities.__doc__ =\
     f"""
     Get the probabilities and errors of excitation of any number of ions for all
@@ -411,6 +416,7 @@ probabilities.__doc__ =\
         points:
             out[1]['error'] = array([0.04440978, 0.04847529, 0.04489989])
     """
+
 def frequencies(data_file: DataFile) -> np.array:
     """
     Get the frequencies used for each point in the scan.  It doesn't make sense
