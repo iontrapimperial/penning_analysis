@@ -95,7 +95,7 @@ class Axial:
                              thermal_ratio ** self.max_n * scale / (mean_n + 1),
                              self.max_n + 1)
 
-        def __considered_sidebands(self, from_carrier: float) -> np.array:
+    def __considered_sidebands(self, from_carrier: float) -> np.array:
         """
         Return an array of integers which represent the sidebands that should be
         used for this detuning frequency.  `from_carrier` is a detuning from the
