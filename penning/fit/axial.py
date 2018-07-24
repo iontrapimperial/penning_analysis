@@ -132,7 +132,7 @@ class Axial:
         """
         if update:
             self.__update(mean_n, base_rabi, motional_shift)
-        from_carrier = carrier_shift - w
+        from_carrier = w + carrier_shift
         motional = self.motional + motional_shift
         total = 0.0
         for sideband in self.__considered_sidebands(from_carrier):
