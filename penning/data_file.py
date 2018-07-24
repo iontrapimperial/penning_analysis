@@ -1,7 +1,7 @@
 """
-Contains the `load` function, which loads up an output file from the
-spectroscopy controller, including parsing all of the metadata.  This outputs a
-class `DataFile`, which is a Python representation of the data and the metadata.
+Contains the class `DataFile`, which is a Python representation of the data and
+the metadata.  The loading of these is handled by `load()` and `load_many()` in
+the package root.
 
 Also contains functions for extracting the stored data from a `DataFile`.  The
 base function is `independents()`, which automatically detects the type of the
@@ -14,8 +14,8 @@ also in the package namespace.
 import datetime
 import numpy as np
 
-__all__ = ['load', 'DataFile', 'independents', 'probabilities', 'times',
-           'frequencies']
+__all__ = ['DataFile', 'independents', 'probabilities', 'times',
+           'frequencies', 'metadata_fields']
 
 def _nullable(parser):
     """
@@ -36,7 +36,7 @@ def _sideband(string: str):
 # identifiers, the identifier we give them in Python, the parser used to
 # convert their values, an identifier for the type after conversion, and a
 # description of the field.
-_metadata_fields = [
+metadata_fields = [
     (
         'Spectroscopy data file',
         'time',
@@ -203,7 +203,7 @@ class DataFile:
     def __init__(self, data, metadata, file_name):
         self.data = data
         self.file_name = file_name
-        for detail, meta in zip(_metadata_fields, metadata):
+        for detail, meta in zip(metadata_fields, metadata):
             setattr(self, detail[1], meta)
         if self.start_time is None:
             self.step_size = _kHz(self.step_size) # lin kHz to ang Hz
@@ -214,7 +214,7 @@ class DataFile:
     def __repr__(self):
         preamble = f"Penning trap spectrum file '{self.file_name}':"
         attributes = "\n".join([f"  {attr}: {getattr(self, attr)}"
-                                for _, attr, _, _, _ in _metadata_fields])
+                                for _, attr, _, _, _ in metadata_fields])
         return "\n".join([preamble,
                           f"  points: {self.points}",
                           f"  step_size: {self.step_size}",
@@ -222,73 +222,7 @@ class DataFile:
 
 DataFile.__doc__ = DataFile.__doc__.rstrip(" ")\
                    + "\n".join([f"        {attr}: {type} -- {desc}"
-                                for _, attr, _, type, desc in _metadata_fields])
-
-def load(file: str, override_shots:int=None) -> DataFile:
-    """
-    Given a path to a data file, read the metadata and data into Python types
-    and return the resulting class.  The number of shots per point can be
-    overridden with the `override_shots` argument, which takes an integer.
-
-    Arguments:
-    file: str -- The file name to load from.
-    override_shots: ?int --
-        The number of shots per point to use.  This value takes precedence over
-        the number found in the file.  It is a `ValueError` to try and override
-        to a number of shots which doesn't divide cleanly into the total number
-        of acquisitions in the file.
-
-    Returns:
-    DataFile --
-        The Python representation of the output data file.
-
-    Raises:
-    ValueError -- If the override number of shots is invalid for the file.
-    """
-    metadata = []
-    with open(file, "r") as f:
-        line = 0
-        for description, _, parse, type_, _ in _metadata_fields:
-            line += 1
-            file_description = f.readline().rstrip()
-            if description != file_description:
-                raise ValueError(
-                    f"Unexpected field identifier on line {line} of '{file}'."
-                    f"  Expected '{description}', but got '{file_description}'."
-                )
-            line += 1
-            value = f.readline().rstrip()
-            try:
-                metadata.append(parse(value))
-            except ValueError:
-                raise ValueError(
-                    f"Unable to parse value on line {line} of '{file}'."
-                    f"  Value was '{value}', but expected type '{type_}'."
-                )
-        line += 1
-        data_line = f.readline().rstrip()
-        data_string = 'Data:'
-        if data_line != data_string:
-            raise ValueError(
-                f"Expected to see the data identifier '{data_string}' on line"
-                f" {line}, but instead saw '{data_line}'."
-            )
-        data = np.array([int(line) for line in f], dtype=np.int32)
-        data = np.transpose(np.reshape(data, (data.shape[0] // 4, 4)))
-        data = np.core.records.fromarrays(
-                    data,
-                    names='cool, cool_error, counts, counts_error',
-                    formats='i4, i4, i4, i4')
-    data_file = DataFile(data, metadata, file)
-    if override_shots is not None:
-        total_shots = data_file.shots * data_file.points
-        if total_shots % override_shots != 0:
-            raise ValueError("Could not override the number of shots per point"\
-                             + f" to be {override_shots} when the file has"\
-                             + f" {total_shots} total acquisitions.")
-        data_file.shots = override_shots
-        data_file.points = total_shots // override_shots
-    return data_file
+                                for _, attr, _, type, desc in metadata_fields])
 
 def _points(data: np.array, shots: int) -> list:
     """
