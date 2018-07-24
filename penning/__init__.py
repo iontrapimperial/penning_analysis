@@ -16,7 +16,10 @@ associated errors.
 
 If the automatic detection fails, you can manually call
 `data_file.frequencies()` or `data_file.times()` to suit your needs.
+
+For fitting models and functions, look at the `fit` module.
 """
 
-from . import data_file
 from .data_file import load, independents, probabilities, DataFile
+
+from . import data_file, fit
