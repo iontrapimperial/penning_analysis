@@ -21,7 +21,7 @@ If the automatic detection fails, you can manually call
 For fitting models and functions, look at the `fit` module.
 """
 
-from .data_file import independents, probabilities, DataFile
+from .data_file import independents, probabilities, DataFile, counts
 from .loader import load, load_many
 
 from . import data_file, fit

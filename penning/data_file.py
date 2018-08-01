@@ -15,7 +15,7 @@ import datetime
 import numpy as np
 
 __all__ = ['DataFile', 'independents', 'probabilities', 'times',
-           'frequencies', 'metadata_fields']
+           'frequencies', 'metadata_fields', 'counts']
 
 def _nullable(parser):
     """
@@ -457,3 +457,62 @@ def independents(data_file: DataFile) -> np.array:
     except KeyError:
         raise ValueError(f"Unknown scan type {data_file.type}.  Could not"
                          + " detect independent parameter type.")
+
+def counts(data_files, cool_threshold=0, which="count", reject_errors=True):
+    """
+    Get the histogram data for the number of counts seen per shot in a data
+    file or sequence of data files.  This can return the counts from the cooling
+    or counting periods, reject points with errors in them, and remove counts
+    which did not reach the cooling threshold.
+
+    Arguments --
+    data_files: DataFile or iterable of DataFile --
+        The data file to get the data from.  If an iterable is passed, then the
+        data from all of them will be concatenated.
+
+    cool_threshold: ?int --
+        The value of the cooling threshold to use.  Setting this to 0 (the
+        default) or a negative number disables rejection based on this
+        criterion, since cooling values must be greater than or equal to this.
+        This value is not read if the counts being returned are from the cooling
+        period.
+
+    which: str in ["cool", "count"] --
+        Which period of counting to return the data from.  The default is
+        "count", which is usually what we want to see.
+
+    reject_errors: bool --
+        If `True`, then don't include points where the laser indicated an error
+        in either the cooling or counting (if relevant) period.
+
+
+    Returns --
+    numpy.array(dtype=np.int32) --
+        The counts, where the index of the array is the number of photons
+        detected.  So `counts(file)[4]` gives the number of times 4 photons were
+        seen.  This array is always 1D, but the shape is variable - it will be
+        exactly large enough to contain the highest count seen.
+    """
+    which = which.lower()
+    allowed = ["cool", "count"]
+    if which not in allowed:
+        raise ValueError(f"`which` must be one of {allowed}, but is '{which}'.")
+    try:
+        data_files = iter(data_files)
+    except TypeError:
+        data_files = [data_files]
+    def extract(file):
+        data = file.data
+        mask = np.ones(data.shape[0], dtype=np.bool)
+        if which == "count":
+            mask = np.logical_and(mask, data['cool'] >= cool_threshold)
+        if reject_errors:
+            mask = np.logical_and(mask, np.logical_not(data['cool_error']))
+            mask = np.logical_and(mask, np.logical_not(data['count_error']))
+        return data[which][mask]
+        data = [file.data['cool'] for file in data_files]
+    ns, ys = np.unique(np.concatenate([extract(file) for file in data_files]),
+                       return_counts=True)
+    out = np.zeros(ns[-1] + 1, dtype=np.int32)
+    out[ns] = ys
+    return out
