@@ -63,7 +63,7 @@ def load(file: str, override_shots:int=None) -> DataFile:
         data = np.transpose(np.reshape(data, (data.shape[0] // 4, 4)))
         data = np.core.records.fromarrays(
                     data,
-                    names='cool, cool_error, counts, counts_error',
+                    names='cool, cool_error, count, count_error',
                     formats='i4, i4, i4, i4')
     data_file = DataFile(data, metadata, file)
     if override_shots is not None:

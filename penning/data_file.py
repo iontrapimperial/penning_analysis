@@ -191,7 +191,7 @@ class DataFile:
 
     Members --
         data: numpy.array(dtype=[("cool", "i4"), ("cool_error", "i4"),
-                                 ("counts", "i4"), ("counts_error", "i4")]) --
+                                 ("count", "i4"), ("count_error", "i4")]) --
             The raw data from the file, arranged into a structured numpy array.
             The different columns of data are can be accessed by indexing on the
             string identifying the columns, for example
@@ -320,10 +320,10 @@ def _point_probabilities(point, cool_threshold, count_thresholds, min_error):
     # boolean mask to pull out valid shots
     cooling_mask = point['cool'] >= cool_threshold
     error_mask = np.logical_not(np.logical_or(point['cool_error'],
-                                              point['counts_error']))
+                                              point['count_error']))
     shots = point[np.logical_and(cooling_mask, error_mask)]
     probabilities = np.zeros(n_ions + 1, dtype=np.float64)
-    for count in shots['counts']:
+    for count in shots['count']:
         probabilities[n_ions - n_ground_ions(count)] += 1
     nshots = shots.shape[0]
     probabilities = probabilities / nshots
@@ -339,7 +339,7 @@ _point_probabilities.__doc__ =\
 
     Arguments --
     point: np.array(dtype=[("cool", "i4"), ("cool_error", "i4"),
-                           ("counts", "i4"), ("counts_error", "i4")]) --
+                           ("count", "i4"), ("count_error", "i4")]) --
         A point of data.  Each row in the array corresponds to one shot from the
         point, and the structured fields are the same form as is read in when
         the data file is loaded.
