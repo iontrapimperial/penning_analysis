@@ -15,6 +15,7 @@ don't get the descriptive names - you have to do everything yourself.
 import numpy as np
 import numbers
 import abc
+from . import hex as hex_
 
 __all__ = ['Pulse', 'Loop', 'Command',
            'doppler_cool', 'prepare_state', 'sideband_cool', 'probe', 'count',
@@ -147,8 +148,16 @@ class Pulse(Element):
         else:
             raise TypeError("Can't interpret a time of type "\
                             + self.time.__class__.__name__ + ".")
-        self.children = []
+        self.children = ()
         self.shots = int(self.count)
+
+    def hex(self, args={}):
+        time = self.time if isinstance(self.time, numbers.Number)\
+               else self.time(*map(args.get, self.time.__code__.co_varnames))
+        ticks = int(round(time * 1e9 / 40)) # 1 tick = 40ns
+        type = hex_.CommandType.FIRE_LASERS_AND_COUNT if self.count\
+               else hex_.CommandType.FIRE_LASERS
+        return hex_.instruction(ticks, self.lasers, self.dds_profile, type)
 
     def xml(self, args={}):
         time = self.time if isinstance(self.time, numbers.Number)\
@@ -232,6 +241,38 @@ class Loop(Element):
         self.fpga = fpga
         self.name = name
 
+    def hex(self, args={}):
+        if self.fpga:
+            loop_start = hex_.instruction(self.reps, set(), 6,
+                                         hex_.CommandType.LOOP_START)
+            content = b"".join([el.hex(args) for el in self.children])
+            loop_end = hex_.instruction(0, set(), 6, hex_.CommandType.LOOP_END)
+            return b"".join([loop_start, content, loop_end])
+        elif not self.unroll:
+            return b"".join([el.hex(args) for el in self.children]) * self.reps
+        else:
+            args = args.copy()
+            vary_indices = [i for i, el in enumerate(self.children)\
+                            if not el.static]
+            # Make it always go static - vary - static - vary - static all
+            # the way along (though some static bits might be empty string).
+            statics = []
+            prev = 0
+            for i in vary_indices:
+                statics.append(b"".join([el.hex()\
+                                        for el in self.children[prev:i]]))
+                prev = i + 1
+            statics.append(b"".join([el.hex() for el\
+                                    in self.children[vary_indices[-1] + 1:]]))
+            def per_loop(value):
+                args[self.loop_var] = value
+                for i, vary in enumerate(vary_indices):
+                    yield statics[i]
+                    yield self.children[vary].hex(args)
+                yield statics[-1]
+            return b"".join((b"".join(per_loop(value))\
+                            for value in self.loop_values))
+
     def xml(self, args={}):
         if not self.unroll:
             loop_head = " ".join(['<Loop',
@@ -265,6 +306,11 @@ class Loop(Element):
 Loop.__doc__ =  "\n".join([Loop.__doc__,
                            _doc_required_members.strip("\n")])
 
+_command_type = {
+        "SendData": hex_.CommandType.SEND_DATA,
+        "Wait_Labview": hex_.CommandType.WAIT_FOR_COMPUTER,
+}
+
 class Command(Element):
     """
     A sequence command which has no interacting lasers, takes no time, but only
@@ -283,6 +329,8 @@ class Command(Element):
         self.type = type
         self.lasers = set()
         self.dds_profile = 0
+    def hex(self, args={}):
+        return hex_.instruction(0, self.lasers, 0, _command_type[self.type])
     def xml(self, args={}):
         return _xml_command(self, 0, self.type)
 Command.__doc__ =  "\n".join([Command.__doc__,
@@ -311,12 +359,12 @@ def sideband_cool(time=10e-3, profile=1, name="Sideband cool"):
     return Pulse(time, ["b1", "729", "854", "radial"], dds_profile=profile,
                  name=name)
 
-def probe(time, profile, name="Probe"):
+def probe(time, profile, add_lasers=[], name="Probe"):
     """
     A pulse using only the 729 laser on a given DDS profile.  This is the
     bread-and-butter state manipulation pulse.
     """
-    return Pulse(time, ["729"], dds_profile=profile, name=name)
+    return Pulse(time, ["729"] + add_lasers, dds_profile=profile, name=name)
 
 def wait(time, profile=0, name="Wait"):
     """
