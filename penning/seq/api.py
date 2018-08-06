@@ -43,7 +43,7 @@ def write_xml(file, elements, base_args={}):
         The base argument dictionary to use, which must fill in any loose
         variables which are not defined by loops.
     """
-    str = create(elements, base_args)
+    str = create_xml(elements, base_args)
     with open(file, "w") as f:
         print(str, file=f)
 
