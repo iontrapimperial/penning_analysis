@@ -322,12 +322,12 @@ class Command(Element):
     """
     def __init__(self, type, name="unnamed"):
         self.static = True
-        self.vars = set()
+        self.vars = ()
         self.children = ()
         self.shots = 0
         self.name = name
         self.type = type
-        self.lasers = set()
+        self.lasers = set(["b1", "b2", "854", "radial"])
         self.dds_profile = 0
     def hex(self, args={}):
         return hex_.instruction(0, self.lasers, 0, _command_type[self.type])
