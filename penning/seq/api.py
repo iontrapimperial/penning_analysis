@@ -1,9 +1,11 @@
 """
-Provides the commands `create()` for making a string form of the XML files and
-`write()` for writing them to files.
+Provides the top-level commands to the module for creating and writing XML and
+FPGA hex files.  These are `create_xml()`, `create_hex()`, `write_xml()` and
+`write_hex()` respectively.  The XML files are only still available for
+compatability with the C# code.  The hex files are all that is actually needed.
 """
 
-from . import hex
+from . import fpga
 
 __all__ = ['create_xml', 'write_xml', 'create_hex', 'write_hex']
 
@@ -48,12 +50,36 @@ def write_xml(file, elements, base_args={}):
         print(str, file=f)
 
 def create_hex(elements, base_args={}):
+    """
+    Make a bytestring of FPGA hex representing the pulse sequence `elements`.
+
+    Arguments --
+    elements: seq.Element or iterable of seq.Element --
+        The elements in the sequence.  This may often just be a single `Loop`
+        element.
+    base_args: dict --
+        The base argument dictionary to use, which must fill in any loose
+        variables which are not defined by loops.
+    """
     try:
         body = b"".join([e.hex(base_args) for e in elements])
     except TypeError:
         body = elements.hex(base_args)
-    return body + hex.STOP
+    return body + fpga.STOP
 
 def write_hex(file, elements, base_args={}):
+    """
+    Write out an FPGA hex file which can be directly uploaded to the FPGA.
+
+    Arguments --
+    file: str --
+        The file name to write out to.
+    elements: seq.Element or iterable of seq.Element --
+        The elements in the sequence.  This may often just be a single `Loop`
+        element.
+    base_args: dict --
+        The base argument dictionary to use, which must fill in any loose
+        variables which are not defined by loops.
+    """
     with open(file, "wb") as f:
         f.write(create_hex(elements, base_args))

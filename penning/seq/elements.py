@@ -15,16 +15,16 @@ don't get the descriptive names - you have to do everything yourself.
 import numpy as np
 import numbers
 import abc
-from . import hex as hex_
+from . import fpga
 
-__all__ = ['Pulse', 'Loop', 'Command',
-           'doppler_cool', 'prepare_state', 'sideband_cool', 'probe', 'count',
+__all__ = ['Pulse', 'Loop',
+           'doppler_cool', 'pump_to_ground', 'sideband_cool', 'probe', 'count',
            'send_data', 'wait', 'pause_point', 'change_frequency', 'loop']
 
 def _in_set(laser):
     return lambda pulse: laser in pulse.lasers
 def _dds_bit_unset(n):
-    return lambda pulse: not pulse.dds_profile & (0x1 << n)
+    return lambda pulse: not pulse.dds & (0x1 << n)
 
 _laser_states = [
     ("Laser397B1", _in_set("b1")),
@@ -43,8 +43,6 @@ _doc_required_members =\
     """
     name: str --
         Name of the pulse in the pulse creator.
-    children: iterable of Element --
-        Any children of this sequence element, in order.
     vars: set of str --
         The loose variable names that are present in this element, or any
         children of this element.
@@ -53,24 +51,10 @@ _doc_required_members =\
         is run.  A shot is taken any time a "Count" operation happens, whether
         that is during the cooling phase, a dedicated counting phase or any
         other part of the experiment.
-    static: bool --
-        Whether the `xml()` method of this function is static, i.e. its result
-        is independent of the arguments passed.  This is useful because static
-        elements' XML representations can be cached, so they needn't be
-        recreated multiple times in a looping construct.
     """
 
-def _xml_command(element, time, type):
-    ticks = int(round(time * 1e9 / 40)) # 1 tick = 40ns
-    els = ['<Pulse']\
-          + [f'{laser}="{"on" if state(element) else "off"}"'
-             for laser, state in _laser_states]\
-          + [f'Type="{type}"',
-             f'Ticks="{ticks}"',
-             f'TargetLength="{ticks * 0.04:.2f}"',
-             f'Name="{element.name}"',
-             '/>']
-    return " ".join(els)
+def _ticks(time):
+    return int(round(time * 1e9 / 40))
 
 class Element(abc.ABC):
     """
@@ -81,10 +65,8 @@ class Element(abc.ABC):
     Members --
     """
     def __init__(self):
-        self.children = ()
         self.vars = set()
         self.shots = 0
-        self.static = False
         self.name = "unnamed"
 
     @abc.abstractmethod
@@ -92,6 +74,22 @@ class Element(abc.ABC):
         """
         Return a string containing the XML representation of this sequence
         element.
+
+        Arguments --
+        args: dict of (key: str, val: *) --
+            The context of variables which may be used within this element, or
+            children of it.  The keys must be strings, which should minimally
+            include all the variables used in lambda functions in this element
+            or its descendents.  For example, if a property is bound as
+                lambda t: 2 * t - 1
+            then the `args` dictionary must include a `"t"` key.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def hex(self, args={}):
+        """
+        Return a bytestring of the FPGA's hex file for this element.
 
         Arguments --
         args: dict of (key: str, val: *) --
@@ -131,38 +129,47 @@ class Pulse(Element):
     dds_profile: int between 0 and 7 inclusive --
         Which number profile to set the DDS to during this pulse.
     """
-    def __init__(self, time, lasers, dds_profile=0, count=False,
-                 name="nameless"):
-        self.time = time
-        self.count = count
+    def __init__(self, time, lasers, dds, type, name="nameless"):
+        self.__time = time
+        self.type = type
+        self.shots = int(self.type is fpga.FIRE_LASERS_AND_COUNT)
         self.lasers = set(lasers)
-        self.dds_profile = dds_profile
+        self.dds = dds
         self.name = name
-        if isinstance(self.time, numbers.Number):
-            self.time = float(self.time)
-            self.static = True
+        if isinstance(self.__time, numbers.Number):
+            self.__time = float(self.__time)
             self.vars = set()
-        elif hasattr(self.time, "__call__"):
-            self.vars = set(self.time.__code__.co_varnames)
+            self.time = lambda args={}: self.__time
+            self.static = True
+        elif hasattr(self.__time, "__call__"):
+            self.vars = set(self.__time.__code__.co_varnames)
+            self.time = self.__call_time
             self.static = False
         else:
             raise TypeError("Can't interpret a time of type "\
                             + self.time.__class__.__name__ + ".")
-        self.children = ()
-        self.shots = int(self.count)
+
+    def __call_time(self, args):
+        """
+        Extract the actual desired time from a callable `time`.
+        """
+        return self.__time(*map(args.get, self.__time.__code__.co_varnames))
 
     def hex(self, args={}):
-        time = self.time if isinstance(self.time, numbers.Number)\
-               else self.time(*map(args.get, self.time.__code__.co_varnames))
-        ticks = int(round(time * 1e9 / 40)) # 1 tick = 40ns
-        type = hex_.CommandType.FIRE_LASERS_AND_COUNT if self.count\
-               else hex_.CommandType.FIRE_LASERS
-        return hex_.instruction(ticks, self.lasers, self.dds_profile, type)
+        ticks = _ticks(self.time(args))
+        return fpga.instruction(ticks, self.lasers, self.dds, self.type)
 
     def xml(self, args={}):
-        time = self.time if isinstance(self.time, numbers.Number)\
-               else self.time(*map(args.get, self.time.__code__.co_varnames))
-        return _xml_command(self, time, "Count" if self.count else "Normal")
+        ticks = _ticks(self.time(args))
+        els = ['<Pulse']\
+              + [f'{laser}="{"on" if state(self) else "off"}"'
+                 for laser, state in _laser_states]\
+              + [f'Type="{self.type.xml}"',
+                 f'Ticks="{ticks}"',
+                 f'TargetLength="{ticks * 0.04:.2f}"',
+                 f'Name="{self.name}"',
+                 '/>']
+        return " ".join(els)
 Pulse.__doc__ =  "\n".join([Pulse.__doc__,
                             _doc_required_members.strip("\n")])
 
@@ -213,7 +220,7 @@ class Loop(Element):
             self.children = tuple(elements)
         except TypeError:
             self.children = (elements,)
-        # prevent names from clashing inside loop (C# bug)
+        # prevent names from clashing inside loop (C# bug workaround)
         for i, element in enumerate(self.children):
             element.name = f"({i+1:02d}) {element.name}"
         loose_names = set.union(*[el.vars for el in self.children])
@@ -234,42 +241,50 @@ class Loop(Element):
                 "This should be either an integer number of repetitions, or",
                 "a string of a variable name to be bound inside the loop (and",
                 "the next argument should be its values)."]))
-        self.static = not loose_names
         self.unroll = bool(names_to_bind)
         self.vars = loose_names - names_to_bind
         self.shots = sum(map(lambda e: e.shots, self.children)) * self.reps
         self.fpga = fpga
         self.name = name
+        if self.unroll and self.fpga:
+            raise ValueError("This loop needs to be unrolled because it is"\
+                             + f" meant to bind variables ({names_to_bind}),"\
+                             + " so it cannot also be an FPGA loop.")
+
+    def __split_statics_varies(self, base, create):
+        statics = []
+        varies = [i for i, el in enumerate(self.children) if el.vars]
+        prev = 0
+        # Make it always go static - vary - static - vary - static all the way
+        # along (though some static bits might be empty string).
+        for i in varies:
+            statics.append(base.join([getattr(el, create)()\
+                                     for el in self.children[prev:i]]))
+            prev = i + 1
+        statics.append(base.join([getattr(el, create)()\
+                                 for el in self.children[varies[-1] + 1:]]))
+        return statics, varies
+
+    def __looper(self, args, base, create):
+        statics, varies = self.__split_statics_varies(base, create)
+        def loop(value):
+            args[self.loop_var] = value
+            for i, vary in enumerate(varies):
+                yield statics[i]
+                yield getattr(self.children[vary], create)(args)
+            yield statics[-1] # no chance of repeat because len(static) >= 2
+        return loop
 
     def hex(self, args={}):
         if self.fpga:
-            loop_start = hex_.instruction(self.reps, set(), 6,
-                                         hex_.CommandType.LOOP_START)
+            loop_start = fpga.instruction(self.reps, set(), 6, fpga.LOOP_START)
             content = b"".join([el.hex(args) for el in self.children])
-            loop_end = hex_.instruction(0, set(), 6, hex_.CommandType.LOOP_END)
+            loop_end = fpga.instruction(0, set(), 6, fpga.LOOP_END)
             return b"".join([loop_start, content, loop_end])
         elif not self.unroll:
             return b"".join([el.hex(args) for el in self.children]) * self.reps
         else:
-            args = args.copy()
-            vary_indices = [i for i, el in enumerate(self.children)\
-                            if not el.static]
-            # Make it always go static - vary - static - vary - static all
-            # the way along (though some static bits might be empty string).
-            statics = []
-            prev = 0
-            for i in vary_indices:
-                statics.append(b"".join([el.hex()\
-                                        for el in self.children[prev:i]]))
-                prev = i + 1
-            statics.append(b"".join([el.hex() for el\
-                                    in self.children[vary_indices[-1] + 1:]]))
-            def per_loop(value):
-                args[self.loop_var] = value
-                for i, vary in enumerate(vary_indices):
-                    yield statics[i]
-                    yield self.children[vary].hex(args)
-                yield statics[-1]
+            per_loop = self.__looper(args.copy(), b"", "hex")
             return b"".join((b"".join(per_loop(value))\
                             for value in self.loop_values))
 
@@ -282,108 +297,35 @@ class Loop(Element):
             content = "".join([el.xml(args) for el in self.children])
             return "".join([loop_head, content, "</Loop>"])
         else:
-            args = args.copy()
-            vary_indices = [i for i, el in enumerate(self.children)\
-                            if not el.static]
-            # Make it always go static - vary - static - vary - static all
-            # the way along (though some static bits might be empty string).
-            statics = []
-            prev = 0
-            for i in vary_indices:
-                statics.append("".join([el.xml()\
-                                        for el in self.children[prev:i]]))
-                prev = i + 1
-            statics.append("".join([el.xml() for el\
-                                    in self.children[vary_indices[-1] + 1:]]))
-            def per_loop(value):
-                args[self.loop_var] = value
-                for i, vary in enumerate(vary_indices):
-                    yield statics[i]
-                    yield self.children[vary].xml(args)
-                yield statics[-1]
+            per_loop = self.__looper(args.copy(), "", "xml")
             return "".join(("".join(per_loop(value))\
                             for value in self.loop_values))
 Loop.__doc__ =  "\n".join([Loop.__doc__,
                            _doc_required_members.strip("\n")])
 
-_command_type = {
-        "SendData": hex_.CommandType.SEND_DATA,
-        "Wait_Labview": hex_.CommandType.WAIT_FOR_COMPUTER,
-}
+def _pulse_preset(lasers, time, count, dds, name):
+    def _pulse(time=time, count=count, dds=dds, name=name):
+        return Pulse(time, lasers, dds,
+                     fpga.FIRE_LASERS_AND_COUNT if count else fpga.FIRE_LASERS,
+                     name)
+    _pulse.__doc__ = f"Active lasers: {lasers}"
+    return _pulse
 
-class Command(Element):
-    """
-    A sequence command which has no interacting lasers, takes no time, but only
-    performs a command (e.g. changing the frequency, sending data, etc).
-
-    Members --
-    type: str --
-        The XML `Type` attribute.  These are defined by the C# code.
-    """
-    def __init__(self, type, name="unnamed"):
-        self.static = True
-        self.vars = ()
-        self.children = ()
-        self.shots = 0
-        self.name = name
-        self.type = type
-        self.lasers = set(["b1", "b2", "854", "radial"])
-        self.dds_profile = 0
-    def hex(self, args={}):
-        return hex_.instruction(0, self.lasers, 0, _command_type[self.type])
-    def xml(self, args={}):
-        return _xml_command(self, 0, self.type)
-Command.__doc__ =  "\n".join([Command.__doc__,
-                              _doc_required_members.strip("\n")])
-
-def doppler_cool(time=10e-3, count=True, name="Doppler cool"):
-    """
-    A Doppler cooling pulse, which has blue 1, blue 2, the 854 and the radial
-    854 lasers active, and counts for its duration.
-    """
-    return Pulse(time, ["b1", "b2", "854", "radial"], count=count,
-                 name=name)
-def prepare_state(time=100e-6):
-    """
-    The ground state pumping beams, with blue 1, the 854 and the radial 854
-    active.
-    """
-    return Pulse(time, ["b1", "854", "radial"], name="Prepare state")
-
-def sideband_cool(time=10e-3, profile=1, name="Sideband cool"):
-    """
-    A sideband cooling pulse, which has blue 1, the 854 and the radial
-    854 lasers active, the 729 active on the specified profile (defaults to
-    profile 1 if not given) and does _not_ count during.
-    """
-    return Pulse(time, ["b1", "729", "854", "radial"], dds_profile=profile,
-                 name=name)
-
-def probe(time, profile, add_lasers=[], name="Probe"):
-    """
-    A pulse using only the 729 laser on a given DDS profile.  This is the
-    bread-and-butter state manipulation pulse.
-    """
-    return Pulse(time, ["729"] + add_lasers, dds_profile=profile, name=name)
-
-def wait(time, profile=0, name="Wait"):
-    """
-    Wait for a time with no lasers interacting.  The DDS profile can be set, but
-    the 729 is not interacting with the ion.
-    """
-    return Pulse(time, [], dds_profile=profile, name=name)
-
-def count(time=10e-3, name="Count"):
-    """
-    Perform a count operation.  This has lasers blue 1 and blue 2 active.
-    """
-    return Pulse(time, ["b1", "b2"], count=True, name=name)
+doppler_cool = _pulse_preset(["b1", "b2", "854", "radial"], 10e-3, True, 0,
+                             "Doppler cool")
+sideband_cool = _pulse_preset(["b1", "729", "854", "radial"], 10e-3, False, 1,
+                              "Sideband cool")
+pump_to_ground = _pulse_preset(["b1", "854", "radial"], 100e-6, False, 0,
+                               "Prepare state")
+probe = _pulse_preset(["729"], 0, False, 0, "Probe")
+wait = _pulse_preset([], 0, False, 0, "Wait")
+count = _pulse_preset(["b1", "b2"], 10e-3, True, 0, "Count")
 
 def send_data(name="Send data"):
     """
     Issue a command to transfer the data on the FPGA to the computer.
     """
-    return Command("SendData", name=name)
+    return Pulse(0, ["b1", "b2", "854", "radial"], 0, fpga.SEND_DATA, name=name)
 
 def pause_point(name="Pause point"):
     """
@@ -394,7 +336,8 @@ def pause_point(name="Pause point"):
      command, so it will have that unintended side-effect if not used in "Fixed"
      spectrum mode.
      """
-    return Command("Wait_Labview", name=name)
+    return Pulse(0, ["b1", "b2", "854", "radial"], 0, fpga.WAIT_FOR_COMPUTER,
+                 name=name)
 
 def change_frequency(name="Change frequency"):
     """
@@ -402,7 +345,8 @@ def change_frequency(name="Change frequency"):
     "Fixed" mode, except the experiment will be able to be paused at that
     point.
     """
-    return Command("Wait_Labview", name=name)
+    return Pulse(0, ["b1", "b2", "854", "radial"], 0, fpga.WAIT_FOR_COMPUTER,
+                 name=name)
 
 def loop(elements, loop_spec, loop_var=None, fpga=False, name="Loop"):
     """
