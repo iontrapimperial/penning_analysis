@@ -510,7 +510,6 @@ def counts(data_files, cool_threshold=0, which="count", reject_errors=True):
             mask = np.logical_and(mask, np.logical_not(data['cool_error']))
             mask = np.logical_and(mask, np.logical_not(data['count_error']))
         return data[which][mask]
-        data = [file.data['cool'] for file in data_files]
     ns, ys = np.unique(np.concatenate([extract(file) for file in data_files]),
                        return_counts=True)
     out = np.zeros(ns[-1] + 1, dtype=np.int32)
