@@ -24,4 +24,18 @@ For fitting models and functions, look at the `fit` module.
 from .data_file import independents, probabilities, DataFile, counts
 from .loader import load, load_many
 
-from . import data_file, fit, seq, io
+from . import data_file, fit, seq
+
+import warnings, importlib.util
+_python_dependencies = {
+    'io': {'serial'},
+}
+
+for module, dependencies in _python_dependencies.items():
+    faileds = [x for x in dependencies if importlib.util.find_spec(x) is None]
+    if len(faileds) != 0:
+        msg = f"Not loading module '{module}' because of missing dependencies:"\
+              + " '" + "', '".join(dependencies) + "'."
+        warnings.warn(msg)
+    else:
+        importlib.import_module("." + module, package=__name__)
