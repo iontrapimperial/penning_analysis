@@ -6,7 +6,7 @@ etc.).
 
 TODO: list classes and document usage
 """
-__all__ = ['WMLTADataFile', 'PMUtilDataFile']
+__all__ = ['WMLTADataFile', 'PMUtilDataFile', 'PM100DDataFile']
 
 from pathlib import Path
 from datetime import datetime
@@ -157,3 +157,42 @@ class PMUtilDataFile:
         line = line.rstrip().split('\t')
         return (datetime.strptime(line[0], '%d/%m/%Y %H:%M:%S.%f '),
                 float(line[1]), line[2])
+
+class PM100DDataFile:
+    """
+    A file output from the ThorLabs PM100D handheld optical power meter console.
+    
+    Members --
+        path: pathlib.Path -- path to the data file on disk
+        sensor: dict       -- metadata about the sensor
+        start: datetime.datetime -- data acquisition start time
+        wavelength: str    -- wavelength setting (including units) during data
+                              acquisition
+        range: str         -- power range setting during data acquisition
+        data: np.ndarray   -- power measurements in watts
+        times: np.ndarray  -- measurement time bins in seconds relative to 'start'
+    """
+    
+    def __init__(self, path):
+        """Load data from the file at the given path.
+        
+        Arguments --
+            path: str or pathlib.Path
+        """
+        self.path = Path(path)
+        
+        with open(path) as f:
+            metadata = _readsplit(f)
+            self.sensor = {'part_number': metadata[0]}
+            self.start = datetime.strptime(metadata[1], '%Y-%m-%d %H:%M:%S')
+            data_unit, time_unit = [_parse_unit(s) for s in _readsplit(f)]
+            self.wavelength = _takelast(f)
+            self.range = _takelast(f)
+            
+            data, times = [], []
+            for line in f:
+                line = line.split('\t')
+                data.append(float(line[0]))
+                times.append(float(line[1]))
+            self.data = np.array(data) * data_unit
+            self.times = np.array(times) * time_unit
