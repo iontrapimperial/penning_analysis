@@ -23,7 +23,7 @@ For fitting models and functions, look at the `fit` module.
 
 from .data_file import independents, probabilities, DataFile, counts
 from .loader import load, load_many
-from .datafile import WMLTADataFile
+from .datafile import WMLTADataFile, PMUtilDataFile
 
 from . import data_file, fit, seq
 

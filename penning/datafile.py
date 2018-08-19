@@ -1,13 +1,27 @@
-"""
-Support for loading data files from various sources into python.
+"""Support for loading data files from various sources into python.
+
+All loaded data is converted to un-prefixed units unless explicitly stated
+otherwise (e.g. meters instead of nanometers, seconds instead of milliseconds, 
+etc.).
 
 TODO: list classes and document usage
 """
-__all__ = ['WMLTADataFile']
+__all__ = ['WMLTADataFile', 'PMUtilDataFile']
 
 from pathlib import Path
 from datetime import datetime
 import numpy as np
+
+# helper functions for reading a line of data
+_readsplit = lambda file: file.readline().rstrip().split('\t')
+_takelast = lambda file: _readsplit(file)[-1]
+
+_unit = {'W' : 1,
+         'ms': 1e-3,
+         'mV': 1e-3,
+         'nm': 1e-9}
+# get unit string between [brackets] and return conversion factor
+_parse_unit = lambda string: _unit[string.split('[')[1].split(']')[0]]
 
 class WMLTADataFile:
     """A .lta file output from the HighFinesse WS8 wavemeter.
@@ -39,17 +53,17 @@ class WMLTADataFile:
         """A single input/output channel of the HighFinesse WS8 wavemeter.
         
         Members --
-            name: str -- channel name, including the units of 'data'; e.g.
-                         'Signal 1 Wavelength, vac. [nm]', or 'Analog output
-                         voltage 2 [mV]', etc.
-            times: np.ndarray -- measurement time bins, in units of seconds
-            data: np.ndarray -- wavemeter measurements, in units indicated by
-                                the 'name' attribute
+            name: str -- channel name indicating the type of 'data'; e.g.
+                         'Signal 1 Wavelength, vac.', or 'Analog output voltage
+                         2', etc.
+            times: np.ndarray -- measurement time bins in seconds
+            data: np.ndarray -- wavemeter measurements in un-prefixed units
+                                consistent with the 'name' attribute
         """
         def __init__(self, name, times, data):
             self.name = name
-            self.times = np.array(times)
-            self.data = np.array(data)
+            self.times = times
+            self.data = data
     
     def __init__(self, path):
         """Load data from the file at the given path.
@@ -60,33 +74,86 @@ class WMLTADataFile:
         self.path = Path(path)
         
         with open(self.path) as f:
-            read_next_line = lambda file: file.readline().rstrip().split('\t')
-            read_next_value = lambda file: read_next_line(file)[-1]
-            
             self.file_type = f.readline().rstrip()
-            self.file_version = int(read_next_value(f))
+            self.file_version = int(_takelast(f))
             f.readline()
-            self.nframes = int(read_next_value(f))
-            self.msrmnts = int(read_next_value(f))
+            self.nframes = int(_takelast(f))
+            self.msrmnts = int(_takelast(f))
             
             datetime_fmt = '%d.%m.%Y, %H:%M:%S.%f'
-            self.start = datetime.strptime(read_next_value(f), datetime_fmt)
-            self.end = datetime.strptime(read_next_value(f), datetime_fmt)
+            self.start = datetime.strptime(_takelast(f), datetime_fmt)
+            self.end = datetime.strptime(_takelast(f), datetime_fmt)
             
             # skip to [Measurement data] section
             while f.readline().rstrip() != '[Measurement data]' : pass
             f.readline()
             
-            frame_names = [name for name in read_next_line(f)][1:]
-            frame_times = [[] for _ in range(self.nframes)]
-            frame_data = [[] for _ in range(self.nframes)]
+            colnames = _readsplit(f)
+            units = [_parse_unit(s) for s in colnames]
+            frnames = [name.split('[')[0].rstrip() for name in colnames[1:]]
+            
+            # parse frame data and corresponding times
+            frdata = [[] for _ in range(self.nframes)]
+            frtimes = [[] for _ in range(self.nframes)]
             for line in f:
                 readings = line.rstrip().split('\t')
-                time = float(readings[0])*1e-3 # convert ms -> s
+                time = float(readings[0])
                 for i, reading in enumerate(readings[1:]):
                     try:
-                        frame_data[i].append(float(reading))
-                        frame_times[i].append(time)
+                        frdata[i].append(float(reading))
+                        frtimes[i].append(time)
                     except: pass
-            self.frames = [WMLTADataFile._Frame(*params) for params in
-                           zip(frame_names, frame_times, frame_data)]
+            
+            # convert to numpy array with correct units
+            frtimes = [np.array(times)*units[0] for times in frtimes]
+            frdata = [np.array(fd)*u for fd, u in zip(frdata, units[1:])]
+            self.frames = [WMLTADataFile._Frame(*params) for params
+                           in zip(frnames, frtimes, frdata)]
+
+class PMUtilDataFile:
+    """
+    A .txt file output from the ThorLabs optical power meter desktop utility.
+    This is from the legacy PC software package.
+    
+    Members --
+        path: pathlib.Path -- path to the data file on disk
+        interface: dict    -- metadata about the sensor-PC interface
+        sensor: dict       -- metadata about the sensor
+        start: datetime.datetime -- data acquisition start time
+        data: np.ndarray   -- power measurements in watts
+        times: np.ndarray  -- measurement time bins, in units of seconds
+                              relative to 'start'
+    """
+    
+    def __init__(self, path):
+        """Load data from the file at the given path.
+        
+        Arguments --
+            path: str or pathlib.Path
+        """
+        self.path = Path(path)
+        
+        with open(self.path) as f:
+            metadata = f.readline().split()
+            self.interface = {'model': metadata[0],
+                              'serial_number': metadata[1],
+                              'firmware_version': metadata[3]}
+            self.sensor = {'part_number': metadata[6],
+                           'serial_number': metadata[7]}
+            
+            self.start, data0, unit_str = self._parse_line(f.readline())
+            times = [0]
+            data = [data0 * _unit[unit_str]]
+            for line in f:
+                timestamp, datum, unit_str = self._parse_line(line)
+                times.append((timestamp - self.start).total_seconds())
+                data.append(datum * _unit[unit_str])
+            self.times = np.array(times)
+            self.data = np.array(data)
+    
+    @staticmethod
+    def _parse_line(line):
+        """Split line at tabs and return (datetime, float, str)"""
+        line = line.rstrip().split('\t')
+        return (datetime.strptime(line[0], '%d/%m/%Y %H:%M:%S.%f '),
+                float(line[1]), line[2])
