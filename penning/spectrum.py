@@ -1,9 +1,9 @@
 """
-Contains the class `DataFile`, which is a Python representation of the data and
+Contains the class `SpectrumDataFile`, which is a Python representation of the data and
 the metadata.  The loading of these is handled by `load()` and `load_many()` in
 the package root.
 
-Also contains functions for extracting the stored data from a `DataFile`.  The
+Also contains functions for extracting the stored data from a `SpectrumDataFile`.  The
 base function is `independents()`, which automatically detects the type of the
 independent parameter (and is available in the package namespace).  You can
 manually call `frequencies()` and `times()` if this generation is not
@@ -14,7 +14,7 @@ also in the package namespace.
 import datetime
 import numpy as np
 
-__all__ = ['DataFile', 'independents', 'probabilities', 'times',
+__all__ = ['SpectrumDataFile', 'independents', 'probabilities', 'times',
            'frequencies', 'metadata_fields', 'counts']
 
 def _nullable(parser):
@@ -181,7 +181,7 @@ metadata_fields = [
     ),
 ]
 
-class DataFile:
+class SpectrumDataFile:
     """
     Container class which holds an imported data file.  This includes all the
     metadata at the top of the file.  The data in here is still in the raw
@@ -220,25 +220,25 @@ class DataFile:
                           f"  step_size: {self.step_size}",
                           attributes])
 
-DataFile.__doc__ = DataFile.__doc__.rstrip(" ")\
+SpectrumDataFile.__doc__ = SpectrumDataFile.__doc__.rstrip(" ")\
                    + "\n".join([f"        {attr}: {type} -- {desc}"
                                 for _, attr, _, type, desc in metadata_fields])
 
 def _points(data: np.array, shots: int) -> list:
     """
-    Divide up the data in a `DataFile` into a list of points.  Each point is a
+    Divide up the data in a `SpectrumDataFile` into a list of points.  Each point is a
     `numpy.array` with `shots` elements in it.  Each shot is a structure tuple
     with the same fields as the original data.
 
     Arguments --
-    data: numpy.array_like(DataFile.data) --
+    data: numpy.array_like(SpectrumDataFile.data) --
         The data to be split into points.  This can directly be the data in the
-        `DataFile.data` field, or it can be data that has been de-interleaved
+        `SpectrumDataFile.data` field, or it can be data that has been de-interleaved
         into separate spectra (if that was necessary).
-    shots: int -- The number of shots per point.  See `DataFile.shots`.
+    shots: int -- The number of shots per point.  See `SpectrumDataFile.shots`.
 
     Returns --
-    list of numpy.array_like(DataFile.data) --
+    list of numpy.array_like(SpectrumDataFile.data) --
         A list of separated `numpy` arrays, where the list index runs over the
         points.
     """
@@ -252,15 +252,15 @@ def _spectra(data: np.array, spectra: int) -> list:
     spectra.
 
     Arguments --
-    data: numpy.array_like(DataFile.data) --
+    data: numpy.array_like(SpectrumDataFile.data) --
         The data to be split into spectra.  This can directly be the data in the
-        `DataFile.data` field, or it can be data that has been split already in
+        `SpectrumDataFile.data` field, or it can be data that has been split already in
         some other manner (if necessary).
     spectra: int --
-        The number of spectra which are interleaved.  See `DataFile.spectra`.
+        The number of spectra which are interleaved.  See `SpectrumDataFile.spectra`.
 
     Returns --
-    list of numpy.array_like(DataFile.data) --
+    list of numpy.array_like(SpectrumDataFile.data) --
         A list of the data separated out into individual spectra.  The list
         index runs over the spectra.
     """
@@ -355,7 +355,7 @@ _point_probabilities.__doc__ =\
         equal to 1.
     """
 
-def probabilities(data_file: DataFile,
+def probabilities(data_file: SpectrumDataFile,
                   cool_threshold: int,
                   count_thresholds: int,
                   min_error: float=0.01) -> np.array:
@@ -372,7 +372,7 @@ probabilities.__doc__ =\
     the points in the data file.
 
     Arguments --
-    data_file: DataFile -- An output data file loaded using `penning.load`.
+    data_file: SpectrumDataFile -- An output data file loaded using `penning.load`.
     {_doc_thresholds.strip()}
 
     Returns --
@@ -417,7 +417,7 @@ probabilities.__doc__ =\
             out[1]['error'] = array([0.04440978, 0.04847529, 0.04489989])
     """
 
-def frequencies(data_file: DataFile) -> np.array:
+def frequencies(data_file: SpectrumDataFile) -> np.array:
     """
     Get the frequencies used for each point in the scan.  It doesn't make sense
     to call this function if the independent parameter was wait time.  Consider
@@ -426,7 +426,7 @@ def frequencies(data_file: DataFile) -> np.array:
     start_offset = data_file.aom_start - data_file.carrier
     return start_offset + data_file.step_size * np.arange(data_file.points)
 
-def times(data_file: DataFile) -> np.array:
+def times(data_file: SpectrumDataFile) -> np.array:
     """
     Get the times used for each point in the scan.  It doesn't make sense to
     call this function if the independent parameter was frequency.  Consider
@@ -441,10 +441,10 @@ _independents = {
     "Fixed":      times,
 }
 
-def independents(data_file: DataFile) -> np.array:
+def independents(data_file: SpectrumDataFile) -> np.array:
     """
     Return an array of the independent parameters for each point in this
-    `DataFile`.  If the spectrum is a frequency scan, this will be an array of
+    `SpectrumDataFile`.  If the spectrum is a frequency scan, this will be an array of
     frequencies in Hz.  If it scans the time (e.g. in a Rabi), it will be an
     array of times in s.
 
@@ -466,7 +466,7 @@ def counts(data_files, cool_threshold=0, which="count", reject_errors=True):
     which did not reach the cooling threshold.
 
     Arguments --
-    data_files: DataFile or iterable of DataFile --
+    data_files: SpectrumDataFile or iterable of SpectrumDataFile --
         The data file to get the data from.  If an iterable is passed, then the
         data from all of them will be concatenated.
 

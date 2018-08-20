@@ -23,7 +23,7 @@ class Axial:
     def __init__(self, data_files, max_n, wait_time, sideband_range=2.5):
         """
         Arguments --
-        data_files: list or single DataFile --
+        data_files: list or single SpectrumDataFile --
             The loaded data files which will determine the frequency range to
             consider.
         max_n: int --
@@ -33,7 +33,7 @@ class Axial:
             The time over which PMT counts were detected.  Also called the
             "detection time".  This is usually in the file name of the hex
             files, which you can see in the `notes` field of any of the
-            `DataFile`s.
+            `SpectrumDataFile`s.
         sideband_range: ?float --
             The maximum distance the centre of a sideband can be to be
             considered in the sum.  For example, if `sideband_range == 2`, then

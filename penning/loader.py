@@ -3,14 +3,14 @@ Provides the `load()` and `load_many()` functions, which are accessible from the
 package root.
 """
 
-from . import DataFile, independents, probabilities
-from .data_file import metadata_fields
+from . import SpectrumDataFile, independents, probabilities
+from .spectrum import metadata_fields
 import pathlib
 import numpy as np
 
 __all__ = ['load', 'load_many']
 
-def load(file: str, override_shots:int=None) -> DataFile:
+def load(file: str, override_shots:int=None) -> SpectrumDataFile:
     """
     Given a path to a data file, read the metadata and data into Python types
     and return the resulting class.  The number of shots per point can be
@@ -25,7 +25,7 @@ def load(file: str, override_shots:int=None) -> DataFile:
         of acquisitions in the file.
 
     Returns:
-    DataFile --
+    SpectrumDataFile --
         The Python representation of the output data file.
 
     Raises:
@@ -65,7 +65,7 @@ def load(file: str, override_shots:int=None) -> DataFile:
                     data,
                     names='cool, cool_error, count, count_error',
                     formats='i4, i4, i4, i4')
-    data_file = DataFile(data, metadata, file)
+    data_file = SpectrumDataFile(data, metadata, file)
     if override_shots is not None:
         total_shots = data_file.shots * data_file.points
         if total_shots % override_shots != 0:
@@ -77,7 +77,7 @@ def load(file: str, override_shots:int=None) -> DataFile:
     return data_file
 
 def load_many(id, cool_threshold, count_threshold, override_shots:int=None,
-              dir=".") -> ([DataFile], np.array, np.array):
+              dir=".") -> ([SpectrumDataFile], np.array, np.array):
     """
     Load many readings files into one coherent set of independent variables and
     measures.  The files, independents and measures are returned as a 3-tuple in
@@ -101,7 +101,7 @@ def load_many(id, cool_threshold, count_threshold, override_shots:int=None,
 
     Returns --
     (files, independents, measures) --
-        files: list of DataFile --
+        files: list of SpectrumDataFile --
             An unordered list of the data files that were found and loaded.
         independents: np.array of float (as angular Hz or s) --
             The independent variables sampled in all of the data files, ordered

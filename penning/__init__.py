@@ -5,7 +5,7 @@ Controller C# program, including parsing the metadata and converting the raw
 output into useable data.
 
 The basic function to load up a data file is `load()`, which returns a class
-`DataFile`.  This contains the raw data as a structured `numpy.array` and the
+`SpectrumDataFile`.  This contains the raw data as a structured `numpy.array` and the
 metadata.  For a more complex loading, use `load_many()` which can load up
 several data files at once, extract their data and order it.
 
@@ -21,11 +21,11 @@ If the automatic detection fails, you can manually call
 For fitting models and functions, look at the `fit` module.
 """
 
-from .data_file import independents, probabilities, DataFile, counts
+from .spectrum import independents, probabilities, SpectrumDataFile, counts
 from .loader import load, load_many
 from .datafile import WMLTADataFile, PMUtilDataFile, PM100DDataFile
 
-from . import data_file, fit, seq
+from . import spectrum, fit, seq
 
 import warnings, importlib.util
 _python_dependencies = {
