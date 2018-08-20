@@ -11,6 +11,7 @@ __all__ = ['WMLTADataFile', 'PMUtilDataFile', 'PM100DDataFile']
 from pathlib import Path
 from datetime import datetime
 import numpy as np
+import glob
 
 # helper functions for reading a line of data
 _readsplit = lambda file: file.readline().rstrip().split('\t')
@@ -22,6 +23,21 @@ _unit = {'W' : 1,
          'nm': 1e-9}
 # get unit string between [brackets] and return conversion factor
 _parse_unit = lambda string: _unit[string.split('[')[1].split(']')[0]]
+
+def load(cls, globpattern):
+    """Initialize a 'cls' object for each file matching 'globpattern'.
+    
+    Arguments --
+        cls: type -- name of class representing type of files to be loaded
+        globpattern: str or pathlib.Path -- path to be expanded and searched
+                                            for data files
+    
+    Returns --
+        [cls] -- list of 'cls' objects loaded with data from each file matching
+                 'globpattern'
+    """
+    return [cls(path) for path in
+            glob.iglob(Path(globpattern).expanduser().as_posix())]
 
 class WMLTADataFile:
     """A .lta file output from the HighFinesse WS8 wavemeter.
