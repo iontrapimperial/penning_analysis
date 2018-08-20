@@ -1,12 +1,30 @@
 """Support for loading data files from various sources into python.
 
+This module contains the following classes:
+    WMLTADataFile  -- wavemeter data file (.lta format)
+    PMUtilDataFile -- desktop power meter utility data file
+    PM100DDataFile -- handheld power meter data file
+
+This module does NOT load spectrum data files. For that, see the spectrum.py
+and loader.py modules.
+
+The 'load' function allows for loading multiple data files and supports
+relative paths, tilde expansion, and globbing, e.g.
+    >>> from penning.datafile import *
+    >>> dfs = load(PMUtilDataFile,
+                   '~/Box Sync/Ion Trapping/PowerMeterData/2018-08-20**/*.txt')
+
+Class initializers can also be used to load single data files but don't support
+path expansion, e.g.
+    >>> path = Path('~/Box Sync/Ion Trapping/PowerMeterData/'\
+                    '2018-08-20_blue-power_pre-trap/blue1-axial.txt')
+    >>> df = PMUtilDataFile(path.expanduser())
+
 All loaded data is converted to un-prefixed units unless explicitly stated
 otherwise (e.g. meters instead of nanometers, seconds instead of milliseconds, 
 etc.).
-
-TODO: list classes and document usage
 """
-__all__ = ['WMLTADataFile', 'PMUtilDataFile', 'PM100DDataFile']
+__all__ = ['load', 'WMLTADataFile', 'PMUtilDataFile', 'PM100DDataFile']
 
 from pathlib import Path
 from datetime import datetime
