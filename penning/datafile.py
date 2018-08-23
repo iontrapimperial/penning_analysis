@@ -38,6 +38,7 @@ _takelast = lambda file: _readsplit(file)[-1]
 _unit = {'W' : 1,
          'ms': 1e-3,
          'mV': 1e-3,
+         'µW': 1e-6,
          'nm': 1e-9}
 # get unit string between [brackets] and return conversion factor
 _parse_unit = lambda string: _unit[string.split('[')[1].split(']')[0]]
