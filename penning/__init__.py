@@ -18,18 +18,15 @@ associated errors.
 If the automatic detection fails, you can manually call
 `data_file.frequencies()` or `data_file.times()` to suit your needs.
 
-For fitting models and functions, look at the `fit` module.
+For modelting models and functions, look at the `model` module.
 """
 
-from .spectrum import independents, probabilities, SpectrumDataFile, counts
-from .loader import load, load_many
-from .datafile import WMLTADataFile, PMUtilDataFile, PM100DDataFile
+from . import model, seq
 
-from . import spectrum, fit, seq
-
-import warnings, importlib.util
+import warnings
+import importlib.util
 _python_dependencies = {
-    'io': {'serial'},
+    'hw': {'serial'},
 }
 
 for module, dependencies in _python_dependencies.items():

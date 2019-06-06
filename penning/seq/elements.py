@@ -12,10 +12,9 @@ defined here.  This gives you more flexibility to do what you want, but you
 don't get the descriptive names - you have to do everything yourself.
 """
 
-import numpy as np
-import numbers
-import abc
-from . import fpga
+import numbers as _numbers
+import abc as _abc
+from . import fpga as _fpga
 
 __all__ = ['Pulse', 'Loop',
            'doppler_cool', 'pump_to_ground', 'sideband_cool', 'probe', 'count',
@@ -56,7 +55,7 @@ _doc_required_members =\
 def _ticks(time):
     return int(round(time * 1e9 / 40))
 
-class Element(abc.ABC):
+class Element(_abc.ABC):
     """
     This abstract base class demonstrates what must be implemented by an element
     of the experimental sequence.  There are some required members, and a
@@ -69,7 +68,7 @@ class Element(abc.ABC):
         self.shots = 0
         self.name = "unnamed"
 
-    @abc.abstractmethod
+    @_abc.abstractmethod
     def xml(self, args={}):
         """
         Return a string containing the XML representation of this sequence
@@ -86,7 +85,7 @@ class Element(abc.ABC):
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
+    @_abc.abstractmethod
     def hex(self, args={}):
         """
         Return a bytestring of the FPGA's hex file for this element.
@@ -132,11 +131,11 @@ class Pulse(Element):
     def __init__(self, time, lasers, dds, type, name="nameless"):
         self.__time = time
         self.type = type
-        self.shots = int(self.type is fpga.FIRE_LASERS_AND_COUNT)
+        self.shots = int(self.type is _fpga.FIRE_LASERS_AND_COUNT)
         self.lasers = set(lasers)
         self.dds = dds
         self.name = name
-        if isinstance(self.__time, numbers.Number):
+        if isinstance(self.__time, _numbers.Number):
             self.__time = float(self.__time)
             self.vars = set()
             self.time = lambda args={}: self.__time
@@ -157,7 +156,7 @@ class Pulse(Element):
 
     def hex(self, args={}):
         ticks = _ticks(self.time(args))
-        return fpga.instruction(ticks, self.lasers, self.dds, self.type)
+        return _fpga.instruction(ticks, self.lasers, self.dds, self.type)
 
     def xml(self, args={}):
         ticks = _ticks(self.time(args))
@@ -277,9 +276,9 @@ class Loop(Element):
 
     def hex(self, args={}):
         if self.fpga:
-            loop_start = fpga.instruction(self.reps, set(), 6, fpga.LOOP_START)
+            loop_start = _fpga.instruction(self.reps, set(), 6, _fpga.LOOP_START)
             content = b"".join([el.hex(args) for el in self.children])
-            loop_end = fpga.instruction(0, set(), 6, fpga.LOOP_END)
+            loop_end = _fpga.instruction(0, set(), 6, _fpga.LOOP_END)
             return b"".join([loop_start, content, loop_end])
         elif not self.unroll:
             return b"".join([el.hex(args) for el in self.children]) * self.reps
@@ -306,7 +305,7 @@ Loop.__doc__ =  "\n".join([Loop.__doc__,
 def _pulse_preset(lasers, time, count, dds, name):
     def _pulse(time=time, count=count, dds=dds, name=name):
         return Pulse(time, lasers, dds,
-                     fpga.FIRE_LASERS_AND_COUNT if count else fpga.FIRE_LASERS,
+                     _fpga.FIRE_LASERS_AND_COUNT if count else _fpga.FIRE_LASERS,
                      name)
     _pulse.__doc__ = f"Active lasers: {lasers}"
     return _pulse
@@ -325,7 +324,7 @@ def send_data(name="Send data"):
     """
     Issue a command to transfer the data on the FPGA to the computer.
     """
-    return Pulse(0, ["b1", "b2", "854", "radial"], 0, fpga.SEND_DATA, name=name)
+    return Pulse(0, ["b1", "b2", "854", "radial"], 0, _fpga.SEND_DATA, name=name)
 
 def pause_point(name="Pause point"):
     """
@@ -336,7 +335,7 @@ def pause_point(name="Pause point"):
      command, so it will have that unintended side-effect if not used in "Fixed"
      spectrum mode.
      """
-    return Pulse(0, ["b1", "b2", "854", "radial"], 0, fpga.WAIT_FOR_COMPUTER,
+    return Pulse(0, ["b1", "b2", "854", "radial"], 0, _fpga.WAIT_FOR_COMPUTER,
                  name=name)
 
 def change_frequency(name="Change frequency"):
@@ -345,7 +344,7 @@ def change_frequency(name="Change frequency"):
     "Fixed" mode, except the experiment will be able to be paused at that
     point.
     """
-    return Pulse(0, ["b1", "b2", "854", "radial"], 0, fpga.WAIT_FOR_COMPUTER,
+    return Pulse(0, ["b1", "b2", "854", "radial"], 0, _fpga.WAIT_FOR_COMPUTER,
                  name=name)
 
 def loop(elements, loop_spec, loop_var=None, fpga=False, name="Loop"):

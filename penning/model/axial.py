@@ -5,7 +5,7 @@ scans taken of the axial mode.
 
 import numpy as np
 from .variables import *
-from .. import independents, probabilities
+from ..data import independents, probabilities
 
 class Axial:
     """

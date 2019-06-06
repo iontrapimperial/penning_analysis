@@ -12,7 +12,7 @@ __all__ = ['create_xml', 'write_xml', 'create_hex', 'write_hex']
 _XML_PREAMBLE = '<?xml version="1.0" encoding="utf-8"?><Experiment>'
 _XML_EPILOGUE = '<Pulse Laser397B1="off" Laser397B2="off" Laser729="off" Laser854="off" Laser729RF1="off" Laser729RF2="off" Laser854POWER="off" Laser854FREQ="off" LaserAux1="off" LaserAux2="off" Type="Stop" Ticks="0" TargetLength="0" Name="Stop" /></Experiment>'
 
-def create_xml(elements, base_args={}):
+def create_xml(elements, base_args=None):
     """
     Make a string of XML representing the pulse sequence `elements`.
 
@@ -24,13 +24,15 @@ def create_xml(elements, base_args={}):
         The base argument dictionary to use, which must fill in any loose
         variables which are not defined by loops.
     """
+    if base_args is None:
+        base_args = {}
     try:
         body = "".join([e.xml(base_args) for e in elements])
     except TypeError:
         body = elements.xml(base_args)
     return "".join([_XML_PREAMBLE, body, _XML_EPILOGUE])
 
-def write_xml(file, elements, base_args={}):
+def write_xml(file, elements, base_args=None):
     """
     Write out an XML file which can be loaded by the Spectroscopy Controller
     pulse sequence designer.
@@ -45,11 +47,13 @@ def write_xml(file, elements, base_args={}):
         The base argument dictionary to use, which must fill in any loose
         variables which are not defined by loops.
     """
-    str = create_xml(elements, base_args)
+    if base_args is None:
+        base_args = {}
+    str_ = create_xml(elements, base_args)
     with open(file, "w") as f:
-        print(str, file=f)
+        print(str_, file=f)
 
-def create_hex(elements, base_args={}):
+def create_hex(elements, base_args=None):
     """
     Make a bytestring of FPGA hex representing the pulse sequence `elements`.
 
@@ -61,13 +65,17 @@ def create_hex(elements, base_args={}):
         The base argument dictionary to use, which must fill in any loose
         variables which are not defined by loops.
     """
+    if base_args is None:
+        base_args = {}
     try:
         body = b"".join([e.hex(base_args) for e in elements])
     except TypeError:
         body = elements.hex(base_args)
     return body + fpga.STOP
 
-def write_hex(file, elements, base_args={}):
+def write_hex(file, elements, base_args=None):
+    if base_args is None:
+        base_args = {}
     """
     Write out an FPGA hex file which can be directly uploaded to the FPGA.
 

@@ -4,7 +4,7 @@ package root.
 """
 
 from . import SpectrumDataFile, independents, probabilities
-from .spectrum import metadata_fields
+from .file import metadata_fields
 import pathlib
 import numpy as np
 
